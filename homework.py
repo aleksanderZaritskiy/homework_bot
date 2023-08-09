@@ -29,6 +29,15 @@ HOMEWORK_VERDICTS = {
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.',
 }
+exceptions_loggins = {
+    'MessageError': 'Cбой при отправке сообщения в Telegram',
+    'requests.exceptions.RequestException':
+    'Возникла проблема с запросом',
+    'UnexpectedStatusError': f'Недоступен {ENDPOINT}.',
+    'JSONDecodeError': 'Возникла проблема с декодировкой json',
+    'TypeError': 'Тип данных API не соотвествует',
+    'KeyError': 'Ошибка с ключами "homework_name" или  "status"',
+}
 
 
 def check_tokens():
@@ -137,21 +146,22 @@ def main():
                 activation_button = True
                 PAYLOAD['from_date'] = answer_server['current_time']
                 logging.info(answer_server)
-        except MessageError as error:
-            logging.error(f'Cбой при отправке "{error}" сообщения в Telegram')
-        except requests.exceptions.RequestException as error:
-            logging.error(f'Возникла проблема с заросом {error}')
-        except UnexpectedStatusError:
-            logging.error(f'Недоступен {ENDPOINT}.')
-        except JSONDecodeError as error:
-            logging.error(f'Возникла проблема с декодировкой .json {error}')
-        except TypeError:
-            logging.error(f'Тип данных API {type(response)}  не соотвествует')
-        except KeyError:
-            logging.error(
-                f'Ошибка с ключами {answer_server.get("homework_name")}, '
-                f'{answer_server.get("status")}'
+
+        except (
+            MessageError,
+            requests.exceptions.RequestException,
+            JSONDecodeError,
+            KeyError,
+            TypeError,
+        ) as error:
+            error_msg = ''.join(
+                [
+                    name
+                    for name in str(error.add_note).split(' ')
+                    if name in exceptions_loggins.keys()
+                ]
             )
+            logging.error(exceptions_loggins.get(error_msg))
         except Exception as error:
             send_message(bot, message=f'Сбой в работе программы: {error}')
         finally:

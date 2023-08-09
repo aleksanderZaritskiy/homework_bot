@@ -164,6 +164,7 @@ def main():
             logging.error(exceptions_loggins.get(error_msg))
         except Exception as error:
             send_message(bot, message=f'Сбой в работе программы: {error}')
+            logging.error(f'Сбой в работе программы: {error}')
         finally:
             time.sleep(RETRY_PERIOD)
 

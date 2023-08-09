@@ -1,23 +1,20 @@
 import logging
 import os
+import sys
 import time
 from http import HTTPStatus
 
 import requests
+from json import JSONDecodeError
 from telegram import Bot
 from telegram.error import TelegramError
 from dotenv import load_dotenv
 
-from exceptions import UnexpectedStatusError, HomeWorkStatus
+from exceptions import UnexpectedStatusError, DecoderError, MessageError
 
 
 load_dotenv()
 
-logging.basicConfig(
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    filename='program.log',
-    level=logging.INFO,
-)
 
 PRACTICUM_TOKEN = os.getenv('PRACTIC_TOKEN')
 TELEGRAM_TOKEN = os.getenv('TG_TOKEN')
@@ -26,7 +23,7 @@ RETRY_PERIOD = 600
 ENDPOINT = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 PAYLOAD = {'from_date': None}
-NEWEST_API_ANSWER = 0
+NEWEST_HOMEWORK = -1
 HOMEWORK_VERDICTS = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
@@ -36,56 +33,66 @@ HOMEWORK_VERDICTS = {
 
 def check_tokens():
     """Убеждаемся что все данные окружения присуствуют."""
-    return None not in (PRACTICUM_TOKEN, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID)
+    tokens = {
+        'PRACTICUM_TOKEN': PRACTICUM_TOKEN,
+        'TELEGRAM_TOKEN': TELEGRAM_TOKEN,
+        'TELEGRAM_CHAT_ID': TELEGRAM_CHAT_ID,
+        'ENDPOINT': ENDPOINT,
+    }
+
+    if not all(tokens.values()):
+        for name, value in tokens.items():
+            if value is None:
+                logging.critical(
+                    f'Отсутствие обязательных переменных окружения {name}'
+                )
+        return False
+    return True
 
 
 def send_message(bot, message=None):
     """Бот отправляет сообщение о неисправности в случае."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
+    except TelegramError as error:
+        raise MessageError(
+            f'Неудается отправить сообщение {message}. Ошибка {error}'
+        )
+    else:
         logging.debug(f'Удачная отправка "{message}" сообщения в Telegram')
-    except TelegramError:
-        logging.error(f'Cбой при отправке "{message}" сообщения в Telegram')
 
 
 def get_api_answer(timestamp):
     """Отправляем запрос к эндпоинту и проверяем статус ответа."""
     try:
         response = requests.get(ENDPOINT, headers=HEADERS, params=PAYLOAD)
-    except requests.exceptions.RequestException:
-        raise UnexpectedStatusError
+    except requests.exceptions.RequestException as error:
+        raise UnexpectedStatusError(f'Возникла проблема с заросом {error}')
     if response.status_code != HTTPStatus.OK:
-        logging.error(
+        raise UnexpectedStatusError(
             f'Недоступен {ENDPOINT}. Стаус ответа {response.status_code}'
         )
-        raise UnexpectedStatusError
-    return response.json()
+    try:
+        response = response.json()
+    except JSONDecodeError as error:
+        raise DecoderError(f'Возникла проблема с декодировкой .json {error}')
+    else:
+        return response
 
 
 def check_response(response):
     """Валидируем полученные данные от API."""
-    final_homework = {}
     if not isinstance(response, dict):
-        logging.error(f'Тип данных API {type(response)} != <dict>')
-        raise TypeError
+        raise TypeError(f'Тип данных API {type(response)} != <dict>')
     elif not isinstance(response.get('homeworks'), list):
-        logging.error(
-            (
-                'Тип данных по ключу "homeworks" '
-                f'{type(response.get("homeworks"))} != <list>'
-            )
+        raise TypeError(
+            'Тип данных по ключу "homeworks" '
+            f'{type(response.get("homeworks"))} != <list>'
         )
-        raise TypeError
-    for d in response['homeworks']:
-        if 'homework_name' in d.keys() or 'status' in d.keys():
-            final_homework.update(d)
-
-    if (
-        'homework_name' not in final_homework.keys()
-        or 'status' not in final_homework.keys()
-    ):
-        logging.error('Отсуствуют ожидаемые  ключи API')
+    elif response['homeworks'] == []:
+        return response['homeworks']
     else:
+        final_homework = response['homeworks'][NEWEST_HOMEWORK]
         return final_homework
 
 
@@ -95,51 +102,66 @@ def parse_status(homework):
     """
     name = homework.get('homework_name')
     verdict = HOMEWORK_VERDICTS.get(homework.get('status'))
-    try:
-        if homework.get('status') not in HOMEWORK_VERDICTS.keys():
-            logging.error(
-                (
-                    'Неожиданный статус домашней работы, '
-                    f'обнаруженный в ответе API {homework.get("status")}'
-                )
-            )
-            raise UnexpectedStatusError()
-        elif not name:
-            raise NameError()
-        elif homework.get('homeworks') == []:
-            raise HomeWorkStatus()
-    except HomeWorkStatus:
-        logging.DEBUG('Статус домашнего задания не изменился')
+    if verdict not in HOMEWORK_VERDICTS.values():
+        raise KeyError(f'Неожиданный статус домашки {homework.get("status")}')
+    elif 'homework_name' not in homework.keys():
+        raise KeyError('В ответе API отсутсвует название домашки')
     return f'Изменился статус проверки работы "{name}". {verdict}'
 
 
 def main():
     """Основная логика работы бота."""
     if not check_tokens():
-        logging.critical(
-            'Отсутствие обязательных переменных окружения'
-        )
+        sys.exit(['Ошибка c переменными окружения. Смотрите логи.'])
 
     bot = Bot(token=TELEGRAM_TOKEN)
     timestamp = int(time.time())
 
     PAYLOAD['from_date'] = timestamp
 
+    activation_button = True
+
     while True:
         try:
             response = get_api_answer(timestamp)
-            homework = check_response(response)
-            if not homework:
-                send_message(bot, message='Статус домашки не изменился')
+            answer_server = check_response(response)
+            if not answer_server:
+                if activation_button:
+                    activation_button = False
+                    send_message(
+                        bot, message='Привет, статус домашки не изменился'
+                    )
+                    logging.DEBUG('Статус домашнего задания не изменился')
             else:
-                send_message(bot, message=parse_status(homework))
-                logging.info(homework)
-                PAYLOAD['from_date'] = homework['current_time']
+                send_message(bot, message=parse_status(answer_server))
+                activation_button = True
+                PAYLOAD['from_date'] = answer_server['current_time']
+                logging.info(answer_server)
+        except MessageError as error:
+            logging.error(f'Cбой при отправке "{error}" сообщения в Telegram')
+        except requests.exceptions.RequestException as error:
+            logging.error(f'Возникла проблема с заросом {error}')
+        except UnexpectedStatusError:
+            logging.error(f'Недоступен {ENDPOINT}.')
+        except JSONDecodeError as error:
+            logging.error(f'Возникла проблема с декодировкой .json {error}')
+        except TypeError:
+            logging.error(f'Тип данных API {type(response)}  не соотвествует')
+        except KeyError:
+            logging.error(
+                f'Ошибка с ключами {answer_server.get("homework_name")}, '
+                f'{answer_server.get("status")}'
+            )
         except Exception as error:
             send_message(bot, message=f'Сбой в работе программы: {error}')
-
-        time.sleep(RETRY_PERIOD)
+        finally:
+            time.sleep(RETRY_PERIOD)
 
 
 if __name__ == '__main__':
+    logging.basicConfig(
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
+        filename='/yandex_practicum/Dev/homework_bot/program.log',
+        level=logging.DEBUG,
+    )
     main()

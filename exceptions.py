@@ -6,7 +6,19 @@ class UnexpectedStatusError(Exception):
     pass
 
 
-class HomeWorkStatus(Exception):
+class HomeWorkStatusError(Exception):
     """Вызывается, если статус домашнего задания не изменился."""
+
+    pass
+
+
+class DecoderError(Exception):
+    """Вызывается, если проблемы с декодировкой json."""
+
+    pass
+
+
+class MessageError(Exception):
+    """Вызывается, если неудается отправить сообщение в Телеграм."""
 
     pass

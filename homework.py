@@ -157,7 +157,7 @@ def main():
             error_msg = ''.join(
                 [
                     name
-                    for name in str(error.add_note).split(' ')
+                    for name in str(error.__str__).split(' ')
                     if name in exceptions_loggins.keys()
                 ]
             )

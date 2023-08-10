@@ -48,8 +48,8 @@ ENV_TOKENS: List[str] = [
 
 def check_tokens() -> bool:
     """Убеждаемся что все данные окружения присуствуют."""
-    uncorrect_token: List[str] = list(
-        filter(lambda d: not globals().get(d), ENV_TOKENS)
+    uncorrect_token: List[str] | List[Any] = list(
+        filter(lambda d: isinstance(globals().get(d), type(None)), ENV_TOKENS)
     )
     if uncorrect_token:
         logging.critical(
@@ -58,7 +58,7 @@ def check_tokens() -> bool:
     return True
 
 
-def send_message(bot: Type[Bot], message: str | None = None) -> str:
+def send_message(bot: Type[Bot], message: str | Any = None) -> str:
     """Бот отправляет сообщение о неисправности в случае."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
@@ -97,7 +97,7 @@ def check_response(response: Dict[str, Any]) -> List | List[Dict[str, Any]]:
         logging.info(f'Тип данных {type(response)}')
         raise TypeError(f'Тип данных API {type(response)} != <dict>')
 
-    homeworks: List[None] | List[Dict[str, Any]] = response.get("homeworks")
+    homeworks: List[Any] | List[Dict[str, Any]] = response.get("homeworks")
 
     if not isinstance(homeworks, list):
         logging.info(
@@ -144,7 +144,7 @@ def main() -> NoReturn:
     while True:
         try:
             response: Dict[str, Any] = get_api_answer(timestamp)
-            answer_server: List[None] | List[Dict[str, Any]] = check_response(
+            answer_server: List[Any] | List[Dict[str, Any]] = check_response(
                 response
             )
             timestamp: int = response['current_date']

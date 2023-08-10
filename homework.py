@@ -93,13 +93,13 @@ def get_api_answer(timestamp: int) -> Dict[str, Any]:
     return response
 
 
-def check_response(response: Dict[str, Any]) -> List | List[Dict[str, Any]]:
+def check_response(response: Dict[str, Any]) -> List:
     """Валидируем полученные данные от API."""
     if not isinstance(response, dict):
         logging.info(f'Тип данных {type(response)}')
         raise TypeError(f'Тип данных API {type(response)} != <dict>')
 
-    homeworks: List | List[Dict[str, Any]] = response.get("homeworks")
+    homeworks: List = response.get("homeworks")
 
     if not isinstance(homeworks, list):
         logging.info(f'Тип данных  ключа "homeworks" {type(homeworks)}')
@@ -143,7 +143,7 @@ def main() -> NoReturn:
     while True:
         try:
             response: Dict[str, Any] = get_api_answer(timestamp)
-            answer_server: List | List[Dict[str, Any]] = check_response(
+            answer_server: List = check_response(
                 response
             )
             timestamp: int = response['current_date']

@@ -48,7 +48,7 @@ ENV_TOKENS: List[str] = [
 
 def check_tokens() -> bool:
     """Убеждаемся что все данные окружения присуствуют."""
-    uncorrect_token: List[str] | List[Any] = list(
+    uncorrect_token: List = list(
         filter(lambda d: isinstance(globals().get(d), type(None)), ENV_TOKENS)
     )
     if uncorrect_token:
@@ -58,7 +58,7 @@ def check_tokens() -> bool:
     return True
 
 
-def send_message(bot: Type[Bot], message: str | Any = None) -> str:
+def send_message(bot: Type[Bot], message: Any = None) -> str:
     """Бот отправляет сообщение о неисправности в случае."""
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
@@ -70,7 +70,7 @@ def send_message(bot: Type[Bot], message: str | Any = None) -> str:
         logging.debug(f'Удачная отправка сообщения в Telegram: "{message}"')
 
 
-def get_api_answer(timestamp: int) -> Dict[str, Any]:
+def get_api_answer(timestamp: int) -> Dict:
     """Отправляем запрос к эндпоинту и проверяем статус ответа."""
     try:
         response = requests.get(
@@ -91,13 +91,13 @@ def get_api_answer(timestamp: int) -> Dict[str, Any]:
     return response
 
 
-def check_response(response: Dict[str, Any]) -> List | List[Dict[str, Any]]:
+def check_response(response: Dict) -> List:
     """Валидируем полученные данные от API."""
     if not isinstance(response, dict):
         logging.info(f'Тип данных {type(response)}')
         raise TypeError(f'Тип данных API {type(response)} != <dict>')
 
-    homeworks: List[Any] | List[Dict[str, Any]] = response.get("homeworks")
+    homeworks: List = response.get("homeworks")
 
     if not isinstance(homeworks, list):
         logging.info(
@@ -115,7 +115,7 @@ def check_response(response: Dict[str, Any]) -> List | List[Dict[str, Any]]:
     return homeworks
 
 
-def parse_status(homework: Dict[str, Any]) -> str:
+def parse_status(homework: Dict) -> str:
     """Дополнительная валидация, проверяем изменился ли статус.
     Отправляем ответ в Телеграм
     """
@@ -143,8 +143,8 @@ def main() -> NoReturn:
 
     while True:
         try:
-            response: Dict[str, Any] = get_api_answer(timestamp)
-            answer_server: List[Any] | List[Dict[str, Any]] = check_response(
+            response: Dict = get_api_answer(timestamp)
+            answer_server: List = check_response(
                 response
             )
             timestamp: int = response['current_date']

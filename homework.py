@@ -31,7 +31,7 @@ HOMEWORK_VERDICTS: Dict[str, str] = {
     'reviewing': 'Работа взята на проверку ревьюером.',
     'rejected': 'Работа проверена: у ревьюера есть замечания.',
 }
-EXCEPTIONS_MESSAGE: Dict[str, str] = {
+EXCEPTIONS_MESSAGE: Dict[Type[Exception], str] = {
     MessageError: 'Cбой при отправке сообщения в Telegram',
     requests.exceptions.RequestException:
     'Возникла проблема с запросом',
@@ -70,7 +70,7 @@ def send_message(bot: Type[Bot], message: Any = None) -> str:
         logging.debug(f'Удачная отправка сообщения в Telegram: "{message}"')
 
 
-def get_api_answer(timestamp: int) -> Dict:
+def get_api_answer(timestamp: int) -> Dict[str, Any]:
     """Отправляем запрос к эндпоинту и проверяем статус ответа."""
     try:
         response = requests.get(
@@ -83,7 +83,7 @@ def get_api_answer(timestamp: int) -> Dict:
             raise UnexpectedStatusError(
                 f'Недоступен {ENDPOINT}. Статус ответа {response.status_code}'
             )
-        response = response.json()
+        response: Dict[str, Any] = response.json()
     except requests.exceptions.RequestException as error:
         raise UnexpectedStatusError(f'Возникла проблема с запросом {error}')
     except JSONDecodeError as error:
@@ -97,7 +97,7 @@ def check_response(response: Dict) -> List:
         logging.info(f'Тип данных {type(response)}')
         raise TypeError(f'Тип данных API {type(response)} != <dict>')
 
-    homeworks: List = response.get("homeworks")
+    homeworks: List[Any] = response.get("homeworks")
 
     if not isinstance(homeworks, list):
         logging.info(

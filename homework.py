@@ -45,6 +45,7 @@ ENV_TOKENS: List[str] = [
     'TELEGRAM_CHAT_ID', 'ENDPOINT',
 ]
 
+
 def check_tokens() -> bool:
     """Убеждаемся что все данные окружения присуствуют."""
     uncorrect_token: List[str] = list(
@@ -95,7 +96,7 @@ def check_response(response: Dict[str, Any]) -> List | List[Dict[str, Any]]:
     if not isinstance(response, dict):
         logging.info(f'Тип данных {type(response)}')
         raise TypeError(f'Тип данных API {type(response)} != <dict>')
-    
+
     homeworks: List[None] | List[Dict[str, Any]] = response.get("homeworks")
 
     if not isinstance(homeworks, list):
@@ -122,7 +123,9 @@ def parse_status(homework: Dict[str, Any]) -> str:
     verdict: str = HOMEWORK_VERDICTS.get(homework.get('status'))
     if homework.get('status') not in HOMEWORK_VERDICTS.keys():
         logging.info(f'статус домашки {homework.get("status")}')
-        raise ValueError(f'Неожиданный статус домашки {homework.get("status")}')
+        raise ValueError(
+            f'Неожиданный статус домашки {homework.get("status")}'
+        )
     elif 'homework_name' not in homework.keys():
         raise KeyError('В ответе API отсутсвует название домашки')
     return f'Изменился статус проверки работы "{name}". {verdict}'
@@ -141,7 +144,9 @@ def main() -> NoReturn:
     while True:
         try:
             response: Dict[str, Any] = get_api_answer(timestamp)
-            answer_server: List[None] | List[Dict[str, Any]] = check_response(response)
+            answer_server: List[None] | List[Dict[str, Any]] = check_response(
+                response
+            )
             timestamp: int = response['current_date']
             if answer_server:
                 send_message(bot, message=parse_status(answer_server[0]))
@@ -173,5 +178,5 @@ if __name__ == '__main__':
         level=logging.DEBUG,
         handlers=[logging.FileHandler(LOG_FILE_DIR, encoding='UTF-8'),
                   logging.StreamHandler(sys.stdout)])
-    
+
     main()

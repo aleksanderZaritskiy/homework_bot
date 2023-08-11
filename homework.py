@@ -25,7 +25,7 @@ ENDPOINT: str = 'https://practicum.yandex.ru/api/user_api/homework_statuses/'
 HEADERS: Dict[str, str] = {'Authorization': f'OAuth {PRACTICUM_TOKEN}'}
 ERROR_MESSAGE: str = 'Сбой в работе программы: '
 DONT_CHANGE_STATUS_MSG: str = 'C крайней проверки, статус не изменился'
-LOG_FILE_DIR: str = '/yandex_practicum/Dev/homework_bot/program.log'
+LOG_FILE_DIR: str = os.path.abspath('program.log')
 HOMEWORK_VERDICTS: Dict[str, str] = {
     'approved': 'Работа проверена: ревьюеру всё понравилось. Ура!',
     'reviewing': 'Работа взята на проверку ревьюером.',
@@ -39,6 +39,7 @@ EXCEPTIONS_MESSAGE: Dict[Type[Exception], str] = {
     JSONDecodeError: 'Возникла проблема с декодировкой json',
     TypeError: 'Тип данных API не соотвествует',
     KeyError: 'Ошибка с ключами "homework_name" или  "status"',
+    Exception: '{ERROR_MESSAGE}'
 }
 ENV_TOKENS: List[str] = [
     'PRACTICUM_TOKEN', 'TELEGRAM_TOKEN',
@@ -49,13 +50,12 @@ ENV_TOKENS: List[str] = [
 def check_tokens() -> bool:
     """Убеждаемся что все данные окружения присуствуют."""
     uncorrect_token: List = list(
-        filter(lambda d: isinstance(globals().get(d), type(None)), ENV_TOKENS)
+        filter(lambda d: globals()[d] is None, ENV_TOKENS)
     )
     if uncorrect_token:
         logging.critical(
             f'Отсутствие обязательных переменных окружения {uncorrect_token}')
-        return False
-    return True
+    return not uncorrect_token
 
 
 def send_message(bot: Type[Bot], message: Any = None) -> str:
@@ -108,9 +108,14 @@ def check_response(response: Dict) -> List:
             f'{type(homeworks)} != <list>'
         )
     elif not response.get('current_date'):
-        raise TypeError(
+        logging.info(
             'Тип данных по ключу "current_date" '
             f'{type(response.get("current_date"))} отсутсвует'
+        )
+    elif not isinstance(response.get('current_date'), int):
+        logging.info(f'Тип данных {type(response.get("current_date"))}')
+        raise TypeError(
+            f'Тип данных API {type(response.get("current_date"))} != <int>'
         )
     return homeworks
 
@@ -159,15 +164,18 @@ def main() -> NoReturn:
             JSONDecodeError,
             KeyError,
             TypeError,
+            Exception,
         ) as error:
             error_msg = EXCEPTIONS_MESSAGE.get(error.__class__)
             logging.error(
                 f'{error} {EXCEPTIONS_MESSAGE.get(error_msg)}', exc_info=True
             )
             send_message(bot, message=f'{ERROR_MESSAGE} {error}')
-        except Exception as error:
-            send_message(bot, message=f'{ERROR_MESSAGE} {error}')
-            logging.error(f'{ERROR_MESSAGE} {error}')
+        except MessageError as error:
+            logging.error(
+                f'{error} {EXCEPTIONS_MESSAGE.get(error.__class__)}',
+                exc_info=True,
+            )
         finally:
             time.sleep(RETRY_PERIOD)
 

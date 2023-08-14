@@ -26,3 +26,17 @@ class MessageError(Exception):
 
 class ApiConnectionError(Exception):
     """Вызывается, если ошибка соединения с API."""
+
+    pass
+
+
+class CurrentDateKeyError(Exception):
+    """Вызывается, если ошибка c ключом current_date."""
+
+    pass
+
+
+class CurrentDateTypeError(Exception):
+    """Вызывается, если тип current_date не int."""
+
+    pass

@@ -16,6 +16,8 @@ from exceptions import (
     DecoderError,
     MessageError,
     ApiConnectionError,
+    CurrentDateKeyError,
+    CurrentDateTypeError,
 )
 
 
@@ -43,7 +45,7 @@ EXCEPTIONS_MESSAGE: Dict[Type[Exception], str] = {
     UnexpectedStatusError: f'Недоступен {ENDPOINT}.',
     JSONDecodeError: 'Возникла проблема с декодировкой json',
     TypeError: 'Тип данных API не соотвествует',
-    KeyError: 'Ошибка с ключами homework_name, status или current_date',
+    KeyError: 'Ошибка с ключами homework_name, status',
     ApiConnectionError: 'Ошибка соединения с API',
     Exception: '{ERROR_MESSAGE}',
 }
@@ -72,8 +74,8 @@ def send_message(bot: Type[Bot], message: Any = None) -> str:
     try:
         bot.send_message(TELEGRAM_CHAT_ID, text=message)
     except TelegramError as error:
-        raise MessageError(
-            f'Неудается отправить сообщение: "{message}". Ошибка "{error}"'
+        logging.error(
+            f'{error} Неудачная отправка сообщения в Telegram: "{message}"'
         )
     else:
         logging.debug(f'Удачная отправка сообщения в Telegram: "{message}"')
@@ -112,9 +114,11 @@ def check_response(response: Dict) -> List:
             'Тип данных по ключу "homeworks" не соответсвует <list>'
         )
     elif not response.get('current_date'):
-        raise KeyError('Отсутствуют данные "current_date"')
+        raise CurrentDateKeyError('Отсутствуют данные "current_date"')
     elif not isinstance(response.get('current_date'), int):
-        raise TypeError('Тип данных "current_date" не соответвует <int>')
+        raise CurrentDateTypeError(
+            'Тип данных "current_date" не соответвует <int>'
+        )
     return homeworks
 
 
@@ -154,13 +158,14 @@ def main() -> NoReturn:
             else:
                 logging.info(DONT_CHANGE_STATUS_MSG)
         except (
-            MessageError,
             requests.exceptions.RequestException,
             JSONDecodeError,
             KeyError,
             TypeError,
             ApiConnectionError,
             UnexpectedStatusError,
+            CurrentDateKeyError,
+            CurrentDateTypeError,
             Exception,
         ) as error:
             error_msg: str = EXCEPTIONS_MESSAGE.get(error.__class__)
@@ -169,17 +174,10 @@ def main() -> NoReturn:
                 exc_info=True,
             )
             if (
-                error.__class__ != MessageError
-                and 'current_date' not in error.args
+                error.__class__ != CurrentDateKeyError
+                and error.__class__ != CurrentDateTypeError
             ):
-                try:
-                    send_message(bot, message=f'{ERROR_MESSAGE} {error}')
-                except MessageError as mess_error:
-                    logging.error(
-                        f'При отправке возникла {mess_error}',
-                        exc_info=True,
-                    )
-
+                send_message(bot, message=f'{ERROR_MESSAGE} {error}')
         finally:
             time.sleep(RETRY_PERIOD)
 

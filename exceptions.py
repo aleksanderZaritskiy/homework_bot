@@ -22,3 +22,7 @@ class MessageError(Exception):
     """Вызывается, если неудается отправить сообщение в Телеграм."""
 
     pass
+
+
+class ApiConnectionError(Exception):
+    """Вызывается, если ошибка соединения с API."""

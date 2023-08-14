@@ -11,7 +11,12 @@ from telegram import Bot
 from telegram.error import TelegramError
 from dotenv import load_dotenv
 
-from exceptions import UnexpectedStatusError, DecoderError, MessageError
+from exceptions import (
+    UnexpectedStatusError,
+    DecoderError,
+    MessageError,
+    ApiConnectionError,
+)
 
 
 load_dotenv()
@@ -39,6 +44,7 @@ EXCEPTIONS_MESSAGE: Dict[Type[Exception], str] = {
     JSONDecodeError: 'Возникла проблема с декодировкой json',
     TypeError: 'Тип данных API не соотвествует',
     KeyError: 'Ошибка с ключами homework_name, status или current_date',
+    ApiConnectionError: 'Ошибка соединения с API',
     Exception: '{ERROR_MESSAGE}',
 }
 ENV_TOKENS: List[str] = [
@@ -88,7 +94,7 @@ def get_api_answer(timestamp: int) -> Dict[str, Any]:
             )
         response: Dict[str, Any] = response.json()
     except requests.exceptions.RequestException as error:
-        raise UnexpectedStatusError(f'Возникла проблема с запросом {error}')
+        raise ApiConnectionError(f'Ошибка соединения с API {error}')
     except JSONDecodeError as error:
         raise DecoderError(f'Возникла проблема с декодировкой .json {error}')
     return response
@@ -97,23 +103,18 @@ def get_api_answer(timestamp: int) -> Dict[str, Any]:
 def check_response(response: Dict) -> List:
     """Валидируем полученные данные от API."""
     if not isinstance(response, dict):
-        logging.info(f'Тип данных {type(response)}')
-        raise TypeError(f'Тип данных API {type(response)} != <dict>')
+        raise TypeError('Тип данных API не соотвествуют <dict>')
 
     homeworks: List[Any] = response.get("homeworks")
 
     if not isinstance(homeworks, list):
-        logging.info(f'Тип данных  ключа "homeworks" {type(homeworks)}')
         raise TypeError(
-            'Тип данных по ключу "homeworks" ' f'{type(homeworks)} != <list>'
+            'Тип данных по ключу "homeworks" не соответсвует <list>'
         )
     elif not response.get('current_date'):
         raise KeyError('Отсутствуют данные "current_date"')
     elif not isinstance(response.get('current_date'), int):
-        raise TypeError(
-            f'Тип данных "current_date" {type(response.get("current_date"))} '
-            '!= <int>'
-        )
+        raise TypeError('Тип данных "current_date" не соответвует <int>')
     return homeworks
 
 
@@ -124,7 +125,6 @@ def parse_status(homework: Dict) -> str:
     name: str = homework.get('homework_name')
     verdict: str = HOMEWORK_VERDICTS.get(homework.get('status'))
     if homework.get('status') not in HOMEWORK_VERDICTS.keys():
-        logging.info(f'статус домашки {homework.get("status")}')
         raise ValueError(
             f'Неожиданный статус домашки {homework.get("status")}'
         )
@@ -159,22 +159,27 @@ def main() -> NoReturn:
             JSONDecodeError,
             KeyError,
             TypeError,
+            ApiConnectionError,
+            UnexpectedStatusError,
             Exception,
         ) as error:
-            error_msg = EXCEPTIONS_MESSAGE.get(error.__class__)
-            if error.__class__ == MessageError or (
-                error.__class__ == KeyError and 'current_date' in error.args
+            error_msg: str = EXCEPTIONS_MESSAGE.get(error.__class__)
+            logging.error(
+                f'{error} {EXCEPTIONS_MESSAGE.get(error_msg)}',
+                exc_info=True,
+            )
+            if (
+                error.__class__ != MessageError
+                and 'current_date' not in error.args
             ):
-                logging.error(
-                    f'{error} {EXCEPTIONS_MESSAGE.get(error_msg)}',
-                    exc_info=True,
-                )
-            else:
-                logging.error(
-                    f'{error} {EXCEPTIONS_MESSAGE.get(error_msg)}',
-                    exc_info=True,
-                )
-                send_message(bot, message=f'{ERROR_MESSAGE} {error}')
+                try:
+                    send_message(bot, message=f'{ERROR_MESSAGE} {error}')
+                except MessageError as mess_error:
+                    logging.error(
+                        f'При отправке возникла {mess_error}',
+                        exc_info=True,
+                    )
+
         finally:
             time.sleep(RETRY_PERIOD)
 

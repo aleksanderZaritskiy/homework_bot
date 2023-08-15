@@ -1,3 +1,11 @@
+class OnlyForLoggingsError(Exception):
+    """Все ошибки, которые будут наследоваться от этого супер-класса.
+    будут только логироваться без вывода сообщения в телеграмм.
+    """
+
+    pass
+
+
 class UnexpectedStatusError(Exception):
     """Вызывается, если неожиданный статус домашней работы.
     обнаруженный в ответе API
@@ -30,13 +38,13 @@ class ApiConnectionError(Exception):
     pass
 
 
-class CurrentDateKeyError(Exception):
+class CurrentDateKeyError(OnlyForLoggingsError):
     """Вызывается, если ошибка c ключом current_date."""
 
     pass
 
 
-class CurrentDateTypeError(Exception):
+class CurrentDateTypeError(OnlyForLoggingsError):
     """Вызывается, если тип current_date не int."""
 
     pass

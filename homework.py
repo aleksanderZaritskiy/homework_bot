@@ -18,6 +18,7 @@ from exceptions import (
     ApiConnectionError,
     CurrentDateKeyError,
     CurrentDateTypeError,
+    OnlyForLoggingsError,
 )
 
 
@@ -94,12 +95,11 @@ def get_api_answer(timestamp: int) -> Dict[str, Any]:
             raise UnexpectedStatusError(
                 f'Недоступен {ENDPOINT}. Статус ответа {response.status_code}'
             )
-        response: Dict[str, Any] = response.json()
+        return response.json()
     except requests.exceptions.RequestException as error:
         raise ApiConnectionError(f'Ошибка соединения с API {error}')
     except JSONDecodeError as error:
         raise DecoderError(f'Возникла проблема с декодировкой .json {error}')
-    return response
 
 
 def check_response(response: Dict) -> List:
@@ -113,8 +113,10 @@ def check_response(response: Dict) -> List:
         raise TypeError(
             'Тип данных по ключу "homeworks" не соответсвует <list>'
         )
+
     elif not response.get('current_date'):
         raise CurrentDateKeyError('Отсутствуют данные "current_date"')
+
     elif not isinstance(response.get('current_date'), int):
         raise CurrentDateTypeError(
             'Тип данных "current_date" не соответвует <int>'
@@ -128,12 +130,15 @@ def parse_status(homework: Dict) -> str:
     """
     name: str = homework.get('homework_name')
     verdict: str = HOMEWORK_VERDICTS.get(homework.get('status'))
+
     if homework.get('status') not in HOMEWORK_VERDICTS.keys():
         raise ValueError(
             f'Неожиданный статус домашки {homework.get("status")}'
         )
+
     elif 'homework_name' not in homework.keys():
         raise KeyError('В ответе API отсутсвует название домашки')
+
     return f'Изменился статус проверки работы "{name}". {verdict}'
 
 
@@ -152,11 +157,19 @@ def main() -> NoReturn:
             response: Dict = get_api_answer(timestamp)
             answer_server: List = check_response(response)
             timestamp: int = response['current_date']
+
             if answer_server:
                 send_message(bot, message=parse_status(answer_server[0]))
                 logging.info(parse_status(answer_server))
+
             else:
                 logging.info(DONT_CHANGE_STATUS_MSG)
+
+        except OnlyForLoggingsError as error:
+            logging.error(
+                f'{error.__class__.__name__}: {error}',
+                exc_info=True,
+            )
         except (
             requests.exceptions.RequestException,
             JSONDecodeError,
@@ -164,20 +177,14 @@ def main() -> NoReturn:
             TypeError,
             ApiConnectionError,
             UnexpectedStatusError,
-            CurrentDateKeyError,
-            CurrentDateTypeError,
             Exception,
         ) as error:
             error_msg: str = EXCEPTIONS_MESSAGE.get(error.__class__)
             logging.error(
-                f'{error} {EXCEPTIONS_MESSAGE.get(error_msg)}',
+                f'{error.__class__.__name__}: {error_msg}',
                 exc_info=True,
             )
-            if (
-                error.__class__ != CurrentDateKeyError
-                and error.__class__ != CurrentDateTypeError
-            ):
-                send_message(bot, message=f'{ERROR_MESSAGE} {error}')
+            send_message(bot, message=f'{error_msg}')
         finally:
             time.sleep(RETRY_PERIOD)
 

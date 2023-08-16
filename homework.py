@@ -170,15 +170,7 @@ def main() -> NoReturn:
                 f'{error.__class__.__name__}: {error}',
                 exc_info=True,
             )
-        except (
-            requests.exceptions.RequestException,
-            JSONDecodeError,
-            KeyError,
-            TypeError,
-            ApiConnectionError,
-            UnexpectedStatusError,
-            Exception,
-        ) as error:
+        except Exception as error:
             error_msg: str = EXCEPTIONS_MESSAGE.get(error.__class__)
             logging.error(
                 f'{error.__class__.__name__}: {error_msg}',
